@@ -135,3 +135,6 @@ printf '%b\n' "${GREEN}========== Phoenix is up! ==========${NC}"
 printf '%b\n' "${YELLOW}Logs:${NC}"
 printf '  docker exec app_phoenix tail -f /tmp/gulp.log\n'
 printf '  docker exec vue_phoenix tail -f /tmp/vue-watch.log\n'
+printf '%b\n' "${YELLOW}Next Steps:${NC}"
+printf '  Import gate and phoenix databases\n'
+printf '  Set .env files\n'
