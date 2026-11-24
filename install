@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo="git@github.com:aasandhadev/phoenix-tools.git"
+dest="${PHOENIX_HOME:-$HOME/.phoenix-tools}"
+bindir="${PHOENIX_BIN_DIR:-$HOME/.local/bin}"
+
+if [[ -d "$dest/.git" ]]; then
+    git -C "$dest" pull --ff-only
+else
+    git clone "$repo" "$dest"
+fi
+
+chmod +x "$dest/phoenix" "$dest"/libexec/*
+mkdir -p -- "$bindir"
+ln -sf -- "$dest/phoenix" "$bindir/phoenix"
+
+printf 'Installed: %s/phoenix\n' "$bindir"
+case ":$PATH:" in
+    *":$bindir:"*) ;;
+    *) printf 'Add to your shell profile: export PATH="$HOME/.local/bin:$PATH"\n' ;;
+esac
