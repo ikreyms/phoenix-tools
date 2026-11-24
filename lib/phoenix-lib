@@ -5,6 +5,17 @@ BLUE='\033[0;34m'
 CYAN='\033[0;36m'
 NC='\033[0m'
 
+usage() {
+    cat <<'EOF'
+Usage: phoenix <command> [options]
+
+Commands:
+  setup [-t parent_dir] [-d name]   Clone all repos into a new project
+  up    [-t project_dir] [-b]       Start containers and install dependencies
+  update                            Update these tools
+EOF
+}
+
 cleanup_on_interrupt() {
     printf '\n%b\n' "${RED}Interrupted. Removing partially cloned project...${NC}" >&2
     rm -rf -- "$rootpath"

@@ -14,16 +14,7 @@ resolve_dir() {
 PHOENIX_ROOT="$(resolve_dir "${BASH_SOURCE[0]}")"
 export PHOENIX_ROOT
 
-usage() {
-    cat <<'EOF'
-Usage: phoenix <command> [options]
-
-Commands:
-  setup [-t parent_dir] [-d name]   Clone all repos into a new project
-  up    [-t project_dir] [-b]       Start containers and install dependencies
-  update                            Update these tools
-EOF
-}
+source "${PHOENIX_ROOT:?Run this through the 'phoenix' command}/lib/phoenix-lib" || exit 1
 
 cmd="${1:-help}"
 shift || true
