@@ -1,0 +1,118 @@
+#!/usr/bin/env bash
+
+source "${PHOENIX_ROOT:?Run this through the 'phoenix' command}/lib/phoenix-lib" || exit 1
+
+target="/var/www"
+dirname="phoenix"
+
+while getopts ":t:d:" opt; do
+    case "$opt" in
+        t)
+            target="$OPTARG"
+            ;;
+        d)
+            dirname="$OPTARG"
+            ;;
+        :)
+            printf 'Option -%s requires an argument.\n' "$OPTARG" >&2
+            exit 1
+            ;;
+        \?)
+            printf 'Invalid option: -%s\n' "$OPTARG" >&2
+            exit 1
+            ;;
+    esac
+done
+
+shift "$((OPTIND - 1))"
+
+if (( $# > 0 )); then
+    echo "Unexpected arguments: $*" >&2
+    exit 1
+fi
+
+if [[ -z "$target" || -z "$dirname" ]]; then
+    echo "Target and directory name cannot be empty." >&2
+    exit 1
+fi
+
+if [[ "$dirname" == "." || "$dirname" == ".." || "$dirname" == */* ]]; then
+    printf '%b\n' "${RED}ERROR: Invalid directory name: $dirname${NC}" >&2
+    exit 1
+fi
+
+if [[ ! -d "$target" ]]; then
+    printf '%b\n' "${YELLOW}$target does not exist, creating it${NC}"
+
+    if ! mkdir -p -- "$target"; then
+        printf '%b\n' "${RED}ERROR: Could not create $target${NC}" >&2
+        exit 1
+    fi
+fi
+
+rootpath=${target}/${dirname}
+
+if [[ -e "$rootpath" ]]; then
+    printf '%b\n' "${RED}ERROR: $rootpath already exists${NC}" >&2
+    exit 1
+fi
+
+oauthpath="${rootpath}/aasandha-oauth"
+gatepath="${rootpath}/gate"
+apipath="${rootpath}/api"
+vuepath="${rootpath}/vue"
+angularpath="${rootpath}/angular"
+
+echo -e "${BLUE}========== Cloning repositories ==========${NC}"
+echo
+
+trap cleanup_on_interrupt INT TERM
+
+clone_with_cleanup "git@github.com:aasandhadev/phoenix-traefik.git" "$rootpath" || exit 1
+clone_with_cleanup "git@github.com:aasandhadev/aasandha-oauth.git" "$oauthpath" || exit 1
+clone_with_cleanup "git@github.com:aasandhadev/gate.git" "$gatepath" || exit 1
+clone_with_cleanup "git@github.com:aasandhadev/phoenix-api.git" "$apipath" || exit 1
+clone_with_cleanup "git@github.com:aasandhadev/phoenixvue-app.git" "$vuepath" || exit 1
+clone_with_cleanup "git@github.com:aasandhadev/phoenix-app.git" "$angularpath" || exit 1
+
+printf '%b\n' "${GREEN}All repositories cloned successfully!${NC}"
+trap - INT TERM
+
+api_branch="prod-2.21.2.1"
+gate_branch="feature/google-authenticator"
+vue_branch="beta-0.21"
+angular_branch="release-1.18"
+
+echo
+printf '%b\n' "${BLUE}========== Branch configuration ==========${NC}"
+printf '%b\n' "${YELLOW}Press Enter to use the default branch.${NC}"
+echo
+
+read -r -p "API branch (${api_branch}): " apibr
+read -r -p "Gate branch (${gate_branch}): " gatebr
+read -r -p "Vue branch (${vue_branch}): " vuebr
+read -r -p "Angular branch (${angular_branch}): " angbr
+
+echo
+
+api_branch="${apibr:-$api_branch}"
+gate_branch="${gatebr:-$gate_branch}"
+vue_branch="${vuebr:-$vue_branch}"
+angular_branch="${angbr:-$angular_branch}"
+
+printf '%b\n' "${BLUE}========== Checking out branches ==========${NC}"
+echo
+
+checkout_failed=0
+
+checkout_branch "API" "$apipath" "$api_branch" || checkout_failed=1
+checkout_branch "Gate" "$gatepath" "$gate_branch" || checkout_failed=1
+checkout_branch "Vue" "$vuepath" "$vue_branch" || checkout_failed=1
+checkout_branch "Angular" "$angularpath" "$angular_branch" || checkout_failed=1
+
+if (( checkout_failed )); then
+    printf '%b\n' "${YELLOW}Phoenix setup completed with checkout warnings.${NC}"
+    printf '%b\n' "${YELLOW}Please manually check the branches that failed to checkout.${NC}"
+else
+    printf '%b\n' "${GREEN}========== Phoenix setup completed successfully! ==========${NC}"
+fi

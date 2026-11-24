@@ -1,0 +1,137 @@
+#!/usr/bin/env bash
+
+set -e
+
+source "${PHOENIX_ROOT:?Run this through the 'phoenix' command}/lib/phoenix-lib" || exit 1
+
+build=false
+target="/var/www/phoenix"
+
+while getopts ":t:b" opt; do
+    case "$opt" in
+        t)
+            target="$OPTARG"
+            ;;
+        b)
+            build=true
+            ;;
+        :)
+            printf '%b\n' "${RED}ERROR: Option -$OPTARG requires an argument.${NC}" >&2
+            exit 1
+            ;;
+        \?)
+            printf '%b\n' "${RED}ERROR: Invalid option: -$OPTARG${NC}" >&2
+            exit 1
+            ;;
+    esac
+done
+
+shift "$((OPTIND - 1))"
+
+if (( $# > 0 )); then
+    printf '%b\n' "${RED}ERROR: Unexpected arguments: $*${NC}" >&2
+    exit 1
+fi
+
+if [[ -z "$target" ]]; then
+    printf '%b\n' "${RED}ERROR: Target directory is required. Use -t <directory>.${NC}" >&2
+    exit 1
+fi
+
+if [[ ! -d "$target" ]]; then
+    printf '%b\n' "${RED}ERROR: Target directory does not exist: $target${NC}" >&2
+    exit 1
+fi
+
+if ! cd -- "$target"; then
+    printf '%b\n' "${RED}ERROR: Could not access target directory: $target${NC}" >&2
+    exit 1
+fi
+
+printf '%b\n' "${CYAN}Working directory: $PWD${NC}"
+echo
+
+printf '%b\n' "${BLUE}========== Starting containers ==========${NC}"
+echo
+
+if [[ "$build" == true ]]; then
+    printf '%b\n' "${CYAN}Building images (no cache)${NC}"
+    docker compose build --no-cache
+fi
+
+docker compose up -d
+
+echo
+printf '%b\n' "${GREEN}Docker containers are running.${NC}"
+echo
+
+printf '%b\n' "${BLUE}========== Angular app ==========${NC}"
+echo
+
+printf '%b\n' "${CYAN}Installing global tools (bower, gulp)${NC}"
+docker exec -it -u root app_phoenix bash -c '
+    set -e
+    npm install -g bower
+    npm install -g gulp
+'
+
+printf '%b\n' "${CYAN}Installing dependencies${NC}"
+docker exec -it -u user app_phoenix bash -c '
+    set -e
+    composer install --no-security-blocking
+    npm install
+    bower install
+'
+
+if ! docker exec app_phoenix pgrep -f gulp >/dev/null; then
+    printf '%b\n' "${CYAN}Starting gulp in the background${NC}"
+    docker exec -d -u user app_phoenix bash -c 'gulp > /tmp/gulp.log 2>&1'
+else
+    printf '%b\n' "${YELLOW}gulp is already running, skipping${NC}"
+fi
+# Can follow gulp logs using: docker exec app_phoenix tail -f /tmp/gulp.log
+echo
+
+printf '%b\n' "${BLUE}========== API ==========${NC}"
+echo
+
+docker exec -it -u user api_phoenix bash -c '
+    set -e
+    composer install --no-scripts --no-security-blocking
+'
+echo
+
+printf '%b\n' "${BLUE}========== Gate ==========${NC}"
+echo
+
+docker exec -it -u user app_gate bash -c '
+    set -e
+    composer install --ignore-platform-reqs --no-scripts
+    yarn install
+    yarn run build
+    [[ -f storage/oauth-private.key ]] || php artisan passport:keys
+'
+echo
+
+printf '%b\n' "${BLUE}========== Vue app ==========${NC}"
+echo
+
+docker exec -it -u user vue_phoenix bash -c '
+    set -e
+    composer install --no-security-blocking
+    yarn install
+'
+
+if ! docker exec vue_phoenix pgrep -f 'yarn run watch' >/dev/null; then
+    printf '%b\n' "${CYAN}Starting Vue watcher in the background${NC}"
+    docker exec -d -u user vue_phoenix bash -c 'yarn run watch > /tmp/vue-watch.log 2>&1'
+else
+    printf '%b\n' "${YELLOW}Vue watcher is already running, skipping${NC}"
+fi
+# Can follow Vue watch logs using: docker exec vue_phoenix tail -f /tmp/vue-watch.log
+echo
+
+printf '%b\n' "${GREEN}========== Phoenix is up! ==========${NC}"
+printf '%b\n' "${YELLOW}Logs:${NC}"
+printf '  docker exec app_phoenix tail -f /tmp/gulp.log\n'
+printf '  docker exec vue_phoenix tail -f /tmp/vue-watch.log\n'
