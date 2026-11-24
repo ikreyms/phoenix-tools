@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-repo="git@github.com:aasandhadev/phoenix-tools.git"
+repo="git@github.com:ikreyms/phoenix-tools.git"
 dest="${PHOENIX_HOME:-$HOME/.phoenix-tools}"
 bindir="${PHOENIX_BIN_DIR:-$HOME/.local/bin}"
 
