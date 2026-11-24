@@ -5,7 +5,7 @@ set -e
 source "${PHOENIX_ROOT:?Run this through the 'phoenix' command}/lib/phoenix-lib" || exit 1
 
 build=false
-target="/var/www/phoenix"
+target=""
 
 while getopts ":t:b" opt; do
     case "$opt" in
@@ -34,8 +34,11 @@ if (( $# > 0 )); then
 fi
 
 if [[ -z "$target" ]]; then
-    printf '%b\n' "${RED}ERROR: Target directory is required. Use -t <directory>.${NC}" >&2
-    exit 1
+    if [[ -f docker-compose.yml ]]; then
+        target="$PWD"
+    else
+        target="/var/www/phoenix"
+    fi
 fi
 
 if [[ ! -d "$target" ]]; then
